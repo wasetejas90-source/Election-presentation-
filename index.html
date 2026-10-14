@@ -453,13 +453,8 @@
                 const vis = getFileVisuals(item.type);
                 const btn = document.createElement('button');
                 btn.onclick = () => {
-                    // PDFs with a hosted URL open directly in a new browser tab on one tap.
-                    // Keep the built-in viewer as a fallback for files stored only on this device.
-                    if (String(item.type || '').toUpperCase() === 'PDF' && item.hasFile && item.fileUrl) {
-                        window.open(item.fileUrl, '_blank', 'noopener,noreferrer');
-                    } else {
-                        openPresentation(item.id);
-                    }
+                    // Open PDFs in the dashboard's built-in viewer, matching the original website experience.
+                    openPresentation(item.id);
                 };
                 btn.className = "glass-card text-left p-7 rounded-3xl flex flex-col justify-between h-full min-h-[12rem] group relative overflow-hidden focus:outline-none focus:ring-4 focus:ring-blue-500/30";
                 btn.style.background = `linear-gradient(135deg, ${item.bgColor || '#ffffff'}ee, ${item.bgColor || '#ffffff'}cc)`;
