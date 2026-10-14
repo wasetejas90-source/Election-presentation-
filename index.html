@@ -22,6 +22,10 @@
     <!-- CRITICAL FIX: localForage for unlimited IndexedDB storage (prevents lag and crashes) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
 
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
     <script>
         tailwind.config = {
             theme: {
@@ -184,10 +188,10 @@
     <div id="admin-login-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4 font-sans">
         <div class="bg-white rounded-3xl max-w-md w-full p-10 shadow-2xl">
             <h3 class="text-2xl font-black text-slate-900 mb-2">Admin Portal</h3>
-            <p class="text-sm font-bold text-slate-500 mb-6">Sign in with your Firebase admin account to modify the live dashboard</p>
+            <p class="text-sm font-bold text-slate-500 mb-6">Sign in with your authorized Firebase admin account</p>
+            <input type="email" id="admin-email-input" value="wasetejas90@gmail.com" autocomplete="username" placeholder="Admin email" class="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-base font-bold focus:outline-none focus:border-blue-500 mb-2">
             
-            <input type="email" id="admin-email-input" placeholder="Admin email address" autocomplete="username" class="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-base font-bold focus:outline-none focus:border-blue-500 mb-3">
-            <input type="password" id="admin-password-input" placeholder="Admin password" autocomplete="current-password" class="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-base font-bold focus:outline-none focus:border-blue-500 mb-2">
+            <input type="password" id="admin-password-input" autocomplete="current-password" placeholder="Firebase password" class="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-base font-bold focus:outline-none focus:border-blue-500 mb-2">
             <p id="password-error" class="text-sm font-bold text-red-500 hidden mb-6">Incorrect passcode.</p>
             
             <div class="flex items-center justify-end gap-3 mt-8">
@@ -270,8 +274,8 @@
     </div>
 
     <!-- Hidden Inputs -->
-    <input type="file" id="hidden-file-input" style="position:fixed;left:-10000px;width:1px;height:1px;opacity:0" accept=".pdf,.ppt,.pptx,.doc,.docx,image/*">
-    <input type="file" id="hidden-logo-input" style="position:fixed;left:-10000px;width:1px;height:1px;opacity:0" accept="image/*">
+    <input type="file" id="hidden-file-input" class="hidden" accept=".pdf,.ppt,.pptx,.doc,.docx,image/*">
+    <input type="file" id="hidden-logo-input" class="hidden" accept="image/*">
     <input type="file" id="hidden-import-input" class="hidden" accept=".json">
 
     <!-- Toast Notification -->
@@ -280,71 +284,9 @@
         <span id="toast-message">Success</span>
     </div>
 
-    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
     <script>
         // Initialize PDF.js Worker
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
-        
-        // SETUP: Paste your Firebase Web App config here (Firebase Console > Project settings > Your apps).
-        const FIREBASE_CONFIG = {
-            apiKey: "AIzaSyBSd-p1E-_ZFpNhj_2ihZePYytPTEdn62I",
-            authDomain: "wardha-vidhan-sabha-dash-c5b7c.firebaseapp.com",
-            projectId: "wardha-vidhan-sabha-dash-c5b7c",
-            storageBucket: "wardha-vidhan-sabha-dash-c5b7c.firebasestorage.app",
-            messagingSenderId: "944859559289",
-            appId: "1:944859559289:web:77d98d87127f9274006ba8"
-        };
-        // Cloudinary: create an UNSIGNED upload preset restricted to PDF, PPT/PPTX, DOC/DOCX and images.
-        // Paste your Cloudinary cloud name and upload preset name below. Never put an API secret here.
-        const CLOUDINARY_CONFIG = { cloudName: "nwuvw0gk", uploadPreset: "wardha_dashboard_upload" };
-        let firebaseReady = false, cloudSaveTimer = null, cloudSaveInProgress = false;
-        let cloudDb = null, cloudAuth = null;
-        function initFirebase() {
-            try {
-                if (!FIREBASE_CONFIG.apiKey || FIREBASE_CONFIG.apiKey.startsWith('PASTE_') || FIREBASE_CONFIG.projectId === 'YOUR_PROJECT_ID') return false;
-                firebase.initializeApp(FIREBASE_CONFIG);
-                cloudAuth = firebase.auth(); cloudDb = firebase.firestore();
-                firebaseReady = true; return true;
-            } catch (e) { console.error('Firebase setup:', e); return false; }
-        }
-        async function loadCloudConfig() {
-            if (!firebaseReady) return null;
-            try { const snap = await cloudDb.collection('wardhaDashboard').doc('main').get(); return snap.exists ? snap.data().config : null; }
-            catch (e) { console.warn('Cloud config unavailable; using this browser copy.', e); return null; }
-        }
-        function queueCloudSave() {
-            if (!firebaseReady || !isAdminAuthenticated || !appData) return;
-            clearTimeout(cloudSaveTimer); cloudSaveTimer = setTimeout(async () => {
-                if (cloudSaveInProgress) { queueCloudSave(); return; }
-                cloudSaveInProgress = true;
-                try { await cloudDb.collection('wardhaDashboard').doc('main').set({config: appData, updatedAt: firebase.firestore.FieldValue.serverTimestamp()}); }
-                catch (e) { console.error(e); showToast('Cloud save failed. Check Firebase setup and rules.', false); }
-                finally { cloudSaveInProgress = false; }
-            }, 500);
-        }
-        async function uploadToCloud(file, path) {
-            if (!firebaseReady) throw new Error('Firebase is not configured. Complete SETUP-GUIDE.txt first.');
-            if (!cloudAuth.currentUser) throw new Error('Please sign in as admin first.');
-            if (!CLOUDINARY_CONFIG.cloudName || CLOUDINARY_CONFIG.cloudName.startsWith('PASTE_') || !CLOUDINARY_CONFIG.uploadPreset || CLOUDINARY_CONFIG.uploadPreset.startsWith('PASTE_')) {
-                throw new Error('Cloudinary is not configured. Complete SETUP-GUIDE.txt first.');
-            }
-            const endpoint = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CONFIG.cloudName}/auto/upload`;
-            const form = new FormData();
-            form.append('file', file);
-            form.append('upload_preset', CLOUDINARY_CONFIG.uploadPreset);
-            form.append('public_id', `${path.replace(/[^a-zA-Z0-9_/-]/g, '_')}`);
-            const response = await fetch(endpoint, { method: 'POST', body: form });
-            const result = await response.json();
-            if (!response.ok || !result.secure_url) throw new Error(result.error?.message || 'Cloudinary upload failed. Check cloud name, preset and file limits.');
-            return result.secure_url;
-        }
-        async function urlToDataUrl(url) {
-            const response = await fetch(url); if (!response.ok) throw new Error('Could not download cloud file');
-            const blob = await response.blob(); return await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(blob); });
-        }
         
         const DEFAULT_CONFIG = {
             titleSmall: "वर्धा विधानसभा - 47",
@@ -367,6 +309,22 @@
             ]
         };
 
+        const firebaseConfig = {
+          apiKey: "AIzaSyBSd-p1E-_ZFpNhj_2ihZePYytPTEdn62I",
+          authDomain: "wardha-vidhan-sabha-dash-c5b7c.firebaseapp.com",
+          projectId: "wardha-vidhan-sabha-dash-c5b7c",
+          storageBucket: "wardha-vidhan-sabha-dash-c5b7c.firebasestorage.app",
+          messagingSenderId: "944859559289",
+          appId: "1:944859559289:web:77d98d87127f9274006ba8",
+          measurementId: "G-MFRFK5FYDL"
+        };
+        let firebaseApp, auth, db;
+        try { firebaseApp = firebase.initializeApp(firebaseConfig); auth = firebase.auth(); db = firebase.firestore(); }
+        catch (e) { console.error('Firebase init failed', e); }
+        const CLOUDINARY_CLOUD_NAME = 'nwuvw0gk';
+        const CLOUDINARY_UPLOAD_PRESET = 'wardha_dashboard_upload';
+        let cloudSyncBusy = false;
+
         let appData = null;
         let isAdminAuthenticated = false;
         let currentZoomLevel = 1.0;
@@ -374,7 +332,6 @@
 
         // Initialize App & Storage
         async function initApp() {
-            initFirebase();
             // Configure localForage to prefer IndexedDB
             localforage.config({
                 name: 'WardhaDashboardDB',
@@ -382,12 +339,17 @@
                 description: 'Stores large PDF/PPT files to avoid localStorage limits'
             });
 
-            const cloudConfig = await loadCloudConfig();
+            // Pull the shared dashboard metadata from Firestore so all visitors see the same cards/URLs.
+            try {
+                if (db) {
+                    const shared = await db.collection('wardhaDashboard').doc('main').get();
+                    if (shared.exists && shared.data().config && Array.isArray(shared.data().config.items)) {
+                        localStorage.setItem('wardha_dashboard_config_v2', JSON.stringify(shared.data().config));
+                    }
+                }
+            } catch (e) { console.warn('Could not load shared dashboard config:', e); }
             const savedConfig = localStorage.getItem('wardha_dashboard_config_v2');
-            if (cloudConfig && Array.isArray(cloudConfig.items)) {
-                appData = cloudConfig;
-                localStorage.setItem('wardha_dashboard_config_v2', JSON.stringify(appData));
-            } else if (savedConfig) {
+            if (savedConfig) {
                 try { 
                     appData = JSON.parse(savedConfig); 
                 } catch (e) { 
@@ -413,22 +375,15 @@
             setAdminUIActive(false);
 
             await renderUI();
-            if (firebaseReady) {
-                cloudDb.collection('wardhaDashboard').doc('main').onSnapshot(snap => {
-                    if (!snap.exists || isAdminAuthenticated) return;
-                    const remote = snap.data().config;
-                    if (remote && Array.isArray(remote.items)) {
-                        appData = remote; localStorage.setItem('wardha_dashboard_config_v2', JSON.stringify(appData));
-                        renderUI();
-                    }
-                }, err => console.warn('Live updates unavailable:', err));
-            }
         }
 
-        function saveConfig() { 
-            // We only save METADATA to localStorage. Files go to localForage.
+        function saveConfig() {
             localStorage.setItem('wardha_dashboard_config_v2', JSON.stringify(appData));
-            queueCloudSave();
+            // Shared writes are permitted by the project's rules only for the authorized Firebase user.
+            if (db && auth && auth.currentUser && auth.currentUser.email === 'wasetejas90@gmail.com' && !cloudSyncBusy) {
+                db.collection('wardhaDashboard').doc('main').set({ config: appData, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true })
+                  .catch(err => { console.error(err); showToast('Cloud sync failed: ' + (err.message || 'check Firestore rules'), false); });
+            }
         }
 
         function showToast(msg, success = true) {
@@ -474,8 +429,8 @@
                 let logoHtml = `<span class="px-3 py-1.5 rounded-lg text-xs font-black tracking-widest font-sans uppercase ${vis.badgeClass} flex items-center gap-2"><i class="ph-fill ${vis.icon} text-base"></i> ${vis.label}</span>`;
                 if (item.hasLogo) {
                     try {
-                        const logoData = await localforage.getItem(`logo_${item.id}`);
-                        if (logoData || item.logoUrl) logoHtml = `<div class="h-10 max-w-[140px] flex items-center justify-start"><img src="${logoData || item.logoUrl}" class="max-h-full max-w-full object-contain drop-shadow-md rounded" alt="Logo"></div>`;
+                        const logoData = item.logoUrl || await localforage.getItem(`logo_${item.id}`);
+                        if (logoData) logoHtml = `<div class="h-10 max-w-[140px] flex items-center justify-start"><img src="${logoData}" class="max-h-full max-w-full object-contain drop-shadow-md rounded" alt="Logo"></div>`;
                     } catch (e) { console.error("Error loading logo from DB", e); }
                 }
                 btn.innerHTML = `
@@ -515,9 +470,8 @@
 
             if (item.hasFile) {
                 try {
-                    let fileData = await localforage.getItem(`file_${item.id}`);
-                    if (!fileData && item.fileUrl) fileData = await urlToDataUrl(item.fileUrl);
-                    if (!fileData) throw new Error("File not found in local or cloud storage");
+                    const fileData = item.fileUrl || await localforage.getItem(`file_${item.id}`);
+                    if (!fileData) throw new Error("File not found in database");
 
                     if (item.type === 'PDF') {
                         pdfWrapper.classList.remove('hidden');
@@ -640,7 +594,6 @@
             if (isAdminAuthenticated) {
                 openAdminPanel();
             } else {
-                document.getElementById('admin-email-input').value = '';
                 document.getElementById('admin-password-input').value = '';
                 document.getElementById('password-error').classList.add('hidden');
                 document.getElementById('admin-login-modal').classList.remove('hidden');
@@ -654,23 +607,31 @@
         }
 
         async function verifyAdminPassword() {
-            const email = document.getElementById('admin-email-input').value.trim();
+            const email = (document.getElementById('admin-email-input').value || '').trim();
             const password = document.getElementById('admin-password-input').value;
-            if (!firebaseReady) { showToast('Firebase is not configured. Follow SETUP-GUIDE.txt.', false); return; }
+            const errorEl = document.getElementById('password-error');
+            errorEl.classList.add('hidden');
             try {
-                await cloudAuth.signInWithEmailAndPassword(email, password);
+                if (!auth) throw new Error('Firebase could not initialize. Reload the page and try again.');
+                const credential = await auth.signInWithEmailAndPassword(email, password);
+                if (!credential.user || credential.user.email !== 'wasetejas90@gmail.com') {
+                    await auth.signOut(); throw new Error('This account is not authorized as dashboard admin.');
+                }
                 isAdminAuthenticated = true;
+                sessionStorage.setItem('wardha_admin', 'active');
                 closeAdminLoginModal(); setAdminUIActive(true); openAdminPanel();
-                showToast('Admin signed in. Cloud updates enabled.');
-            } catch (e) {
-                console.error(e); document.getElementById('password-error').textContent = 'Sign-in failed. Check email/password and Firebase Authentication setup.';
-                document.getElementById('password-error').classList.remove('hidden');
+                showToast('Admin signed in successfully');
+            } catch (err) {
+                console.error('Admin login failed', err);
+                errorEl.textContent = err.code === 'auth/invalid-credential' ? 'Incorrect email or password.' : (err.message || 'Login failed.');
+                errorEl.classList.remove('hidden');
             }
         }
 
         function logoutAdmin() {
             isAdminAuthenticated = false;
-            if (cloudAuth) cloudAuth.signOut().catch(console.warn);
+            sessionStorage.removeItem('wardha_admin');
+            if (auth) auth.signOut().catch(console.warn);
             setAdminUIActive(false);
             showToast("Logged out securely");
         }
@@ -757,7 +718,7 @@
             if (!confirm(`Delete only the attached file from "${item.title}"? The button and logo will remain.`)) return;
             try {
                 await localforage.removeItem(`file_${id}`);
-                item.hasFile = false; item.fileUrl = null;
+                item.hasFile = false;
                 saveConfig(); renderUI(); renderAdminCardsList();
                 showToast('Attached file deleted. Button and logo kept.');
             } catch (e) { console.error(e); showToast('Could not delete the attached file.', false); }
@@ -819,7 +780,6 @@
             const item = appData.items.find(i => i.id === id);
             if (item) {
                 item.hasLogo = false;
-                item.logoUrl = null;
                 saveConfig();
                 await localforage.removeItem(`logo_${id}`);
                 renderUI();
@@ -837,31 +797,34 @@
         });
 
         // Handle Main Document Upload
+        async function uploadToCloudinary(file, resourceType) {
+            const endpoint = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`;
+            const form = new FormData(); form.append('file', file); form.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+            const response = await fetch(endpoint, { method: 'POST', body: form });
+            const result = await response.json();
+            if (!response.ok || !result.secure_url) throw new Error(result.error?.message || `Cloudinary upload failed (${response.status})`);
+            return result.secure_url;
+        }
         document.getElementById('hidden-file-input').addEventListener('change', async function(e) {
             if (!this.files || !this.files[0] || !activeAttachmentId) return;
             const file = this.files[0];
-            
-            showToast("Processing file... Please wait.", true);
-            
+            showToast('Uploading file to shared storage…', true);
             try {
-                const base64Data = await fileToBase64(file);
-                
-                // Store heavily data in IndexedDB (localForage)
-                await localforage.setItem(`file_${activeAttachmentId}`, base64Data);
-                const cloudUrl = await uploadToCloud(file, `dashboard-files/${activeAttachmentId}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`);
-                
-                // Update light metadata config
+                if (!auth || !auth.currentUser || auth.currentUser.email !== 'wasetejas90@gmail.com') throw new Error('Please log in with the authorized Firebase admin account first.');
+                const resourceType = file.type.startsWith('image/') ? 'image' : 'raw';
+                const url = await uploadToCloudinary(file, resourceType);
                 const item = appData.items.find(i => i.id === activeAttachmentId);
-                if (item) {
-                    item.hasFile = true;
-                    item.fileUrl = cloudUrl;
-                    saveConfig();
-                    renderAdminCardsList();
-                    showToast(`File successfully saved to database!`);
-                }
+                if (!item) throw new Error('Dashboard card was not found.');
+                item.fileUrl = url; item.fileName = file.name; item.hasFile = true;
+                cloudSyncBusy = true;
+                await db.collection('wardhaDashboard').doc('main').set({ config: appData, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                localStorage.setItem('wardha_dashboard_config_v2', JSON.stringify(appData));
+                cloudSyncBusy = false;
+                renderUI(); renderAdminCardsList();
+                showToast('Uploaded and published for all visitors!');
             } catch (err) {
-                console.error(err);
-                showToast(err.message || "Error processing file. Check setup and file size.", false);
+                cloudSyncBusy = false; console.error('File upload failed', err);
+                showToast('Upload failed: ' + (err.message || 'check Cloudinary preset and Firestore rules'), false);
             }
             this.value = '';
         });
@@ -870,26 +833,17 @@
         document.getElementById('hidden-logo-input').addEventListener('change', async function(e) {
             if (!this.files || !this.files[0] || !activeLogoId) return;
             const file = this.files[0];
-            
             try {
-                const base64Data = await fileToBase64(file);
-                
-                await localforage.setItem(`logo_${activeLogoId}`, base64Data);
-                const cloudLogoUrl = await uploadToCloud(file, `dashboard-logos/${activeLogoId}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`);
-                
+                if (!auth || !auth.currentUser || auth.currentUser.email !== 'wasetejas90@gmail.com') throw new Error('Please log in with the authorized Firebase admin account first.');
+                const url = await uploadToCloudinary(file, 'image');
                 const item = appData.items.find(i => i.id === activeLogoId);
-                if (item) {
-                    item.hasLogo = true;
-                    item.logoUrl = cloudLogoUrl;
-                    saveConfig();
-                    await renderUI(); 
-                    renderAdminCardsList();
-                    showToast(`Custom logo applied!`);
-                }
-            } catch(err) {
-                console.error(err);
-                showToast(err.message || "Error saving logo. Check setup and file size.", false);
-            }
+                if (!item) throw new Error('Dashboard card was not found.');
+                item.logoUrl = url; item.hasLogo = true;
+                cloudSyncBusy = true;
+                await db.collection('wardhaDashboard').doc('main').set({ config: appData, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                localStorage.setItem('wardha_dashboard_config_v2', JSON.stringify(appData)); cloudSyncBusy = false;
+                await renderUI(); renderAdminCardsList(); showToast('Logo uploaded and published!');
+            } catch (err) { cloudSyncBusy = false; console.error(err); showToast('Logo upload failed: ' + (err.message || 'check preset/rules'), false); }
             this.value = '';
         });
 
@@ -1062,7 +1016,7 @@
                         if (fileData) exportData.files[`file_${item.id}`] = fileData;
                     }
                     if (item.hasLogo) {
-                        const logoData = await localforage.getItem(`logo_${item.id}`);
+                        const logoData = item.logoUrl || await localforage.getItem(`logo_${item.id}`);
                         if (logoData) exportData.files[`logo_${item.id}`] = logoData;
                     }
                 }
