@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1280, initial-scale=0.35, minimum-scale=0.2, maximum-scale=2.0, user-scalable=yes">
+    <title>Wardha Vidhan Sabha Dashboard</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Noto Sans Devanagari & Plus Jakarta Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;600;800;900&family=Plus+Jakarta+Sans:wght@500;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <!-- Mozilla PDF.js for rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    
+    <!-- CRITICAL FIX: localForage for unlimited IndexedDB storage (prevents lag and crashes) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        marathi: ['"Noto Sans Devanagari"', 'sans-serif'],
+                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                    },
+                    colors: {
+                        glass: { 100: 'rgba(255, 255, 255, 0.6)', 200: 'rgba(255, 255, 255, 0.8)' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Noto Sans Devanagari', sans-serif;
+            background-color: #f4f7fa;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(224, 231, 255, 0.7) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(255, 255, 255, 0.9) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(224, 242, 254, 0.6) 0px, transparent 50%);
+            min-height: 100vh;
+            background-attachment: fixed;
+            min-width: 1280px;
+            overflow-x: auto;
+        }
+
+        /* Glassmorphism Cards */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease-out;
+        }
+
+        .glass-card:hover {
+            transform: translateY(-6px);
+            background: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 20px 40px -5px rgba(0, 0, 0, 0.1);
+            border-color: #fff;
+        }
+
+        /* File Badges */
+        .badge-pdf { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+        .badge-ppt { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+        .badge-word { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
+
+        /* Custom Scrollbar for PDF */
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* Force Extra Bold Headings */
+        h1, h2, h3, h4, h5, h6, .font-bold, .font-extrabold, .font-black, label { 
+            font-weight: 900 !important; 
+        }
+        /* Keep every dashboard and admin heading visibly bold */
+        #display-title-small, #display-title-large, #display-subtitle, #viewer-title, #admin-panel h2, #admin-panel h3 { font-weight: 900 !important; }
+        .card-colour-control { min-width: 42px; height: 42px; padding: 3px; border: 2px solid #cbd5e1; border-radius: 10px; background: white; cursor: pointer; }
+    </style>
+</head>
+<body class="text-slate-900 antialiased flex flex-col">
+
+    <!-- Top Nav -->
+    <div class="absolute top-6 right-8 flex items-center gap-4 z-40 font-sans">
+        <button class="glass-card flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold text-slate-800 hover:text-blue-700">
+            <i class="ph-bold ph-translate text-xl"></i>
+            <span>English / मराठी</span>
+        </button>
+
+        <!-- Admin Buttons -->
+        <div class="flex items-center gap-2">
+            <button onclick="handleAdminClick()" id="admin-main-btn" class="glass-card flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold text-slate-800 hover:text-blue-700 transition-colors">
+                <i id="admin-icon" class="ph-bold ph-lock-key text-xl"></i>
+                <span id="admin-text">Admin</span>
+            </button>
+            <button onclick="logoutAdmin()" id="admin-logout-btn" class="hidden glass-card flex items-center justify-center w-11 h-11 rounded-full text-red-600 hover:bg-red-50 font-bold transition-colors shadow-sm" title="Logout">
+                <i class="ph-bold ph-sign-out text-xl"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content Container -->
+    <main class="w-[1280px] mx-auto py-24 px-8 flex-grow flex flex-col items-center">
+        <!-- Header -->
+        <header class="text-center w-full max-w-5xl mb-20 relative flex flex-col items-center">
+            <h4 id="display-title-small" class="text-3xl font-black text-slate-900 mb-4 tracking-wide uppercase">
+                वर्धा विधानसभा - 47
+            </h4>
+            <h1 id="display-title-large" class="text-7xl font-black text-slate-900 mb-6 drop-shadow-sm leading-tight tracking-tight">
+                विश्लेषण : 2009 - 2024
+            </h1>
+            <p id="display-subtitle" class="text-2xl font-black text-slate-900 tracking-wide">
+                निवडणूक विश्लेषण व माहिती फलक
+            </p>
+        </header>
+
+        <!-- Dynamic Cards Grid -->
+        <div id="cards-grid" class="w-full grid grid-cols-3 lg:grid-cols-4 gap-8 auto-rows-fr">
+            <!-- Cards will be injected here via JavaScript -->
+        </div>
+    </main>
+
+    <!-- Presentation Viewer Modal -->
+    <div id="presentation-modal" class="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md hidden opacity-0 transition-opacity duration-300 flex flex-col font-sans">
+        
+        <!-- Toolbar -->
+        <div class="bg-white px-8 py-4 flex items-center justify-between shadow-md z-20">
+            <div class="flex items-center gap-5">
+                <button onclick="closePresentationViewer()" class="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-900 rounded-xl text-sm font-extrabold transition-all">
+                    <i class="ph-bold ph-arrow-left text-lg"></i>
+                    <span>Back to Dashboard</span>
+                </button>
+                <div class="h-8 w-px bg-slate-200"></div>
+                <div class="flex items-center gap-3">
+                    <div id="viewer-icon" class="w-10 h-10 rounded-xl flex items-center justify-center text-xl"></div>
+                    <h3 id="viewer-title" class="text-lg font-black text-slate-900 font-marathi tracking-wide">Document Title</h3>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="flex items-center gap-6">
+                <div class="flex items-center gap-1 bg-slate-100 p-1.5 rounded-2xl">
+                    <button onclick="zoomViewer(-0.1)" class="w-10 h-10 rounded-xl bg-white hover:bg-slate-200 flex items-center justify-center text-slate-800 shadow-sm font-bold text-lg"><i class="ph-bold ph-minus"></i></button>
+                    <span id="zoom-level-text" class="text-base font-extrabold text-slate-800 w-16 text-center">100%</span>
+                    <button onclick="zoomViewer(0.1)" class="w-10 h-10 rounded-xl bg-white hover:bg-slate-200 flex items-center justify-center text-slate-800 shadow-sm font-bold text-lg"><i class="ph-bold ph-plus"></i></button>
+                </div>
+                <button onclick="toggleFullScreen()" class="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-slate-200 hover:bg-slate-100 text-slate-800 text-sm font-extrabold"><i class="ph-bold ph-arrows-out text-lg"></i> Fullscreen</button>
+            </div>
+        </div>
+
+        <!-- Document Container -->
+        <div class="flex-grow bg-slate-300 relative overflow-hidden flex items-center justify-center p-8">
+            <div id="viewer-scale-container" class="w-full h-full max-w-6xl bg-transparent overflow-hidden relative flex flex-col transition-transform duration-200 origin-top">
+                <iframe id="presentation-frame" class="w-full h-full bg-white rounded-2xl shadow-2xl border-none hidden" src=""></iframe>
+                
+                <!-- Infinite Scroll PDF Container -->
+                <div id="pdf-scroll-wrapper" class="hidden overflow-y-auto w-full h-full flex-col items-center rounded-2xl">
+                    <div id="pdf-pages-container" class="flex flex-col items-center w-full max-w-5xl mx-auto pb-20">
+                        <!-- Canvas elements generated by PDF.js -->
+                    </div>
+                </div>
+
+                <!-- Empty State -->
+                <div id="builtin-slide-view" class="w-full h-full flex flex-col bg-white rounded-2xl shadow-2xl hidden justify-center items-center p-12 text-center">
+                    <i class="ph-duotone ph-file-dashed text-7xl text-slate-300 mb-6"></i>
+                    <h2 class="text-4xl font-black text-slate-800 font-marathi mb-4">No File Attached</h2>
+                    <p class="text-lg font-bold text-slate-500">Please log in as Admin to attach a document here.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Login Modal -->
+    <div id="admin-login-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4 font-sans">
+        <div class="bg-white rounded-3xl max-w-md w-full p-10 shadow-2xl">
+            <h3 class="text-2xl font-black text-slate-900 mb-2">Admin Portal</h3>
+            <p class="text-sm font-bold text-slate-500 mb-6">Sign in with your Firebase admin account to modify the live dashboard</p>
+            
+            <input type="email" id="admin-email-input" placeholder="Admin email address" autocomplete="username" class="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-base font-bold focus:outline-none focus:border-blue-500 mb-3">
+            <input type="password" id="admin-password-input" placeholder="Admin password" autocomplete="current-password" class="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-base font-bold focus:outline-none focus:border-blue-500 mb-2">
+            <p id="password-error" class="text-sm font-bold text-red-500 hidden mb-6">Incorrect passcode.</p>
+            
+            <div class="flex items-center justify-end gap-3 mt-8">
+                <button onclick="closeAdminLoginModal()" class="px-5 py-3 text-sm font-extrabold text-slate-600 hover:bg-slate-100 rounded-xl">Cancel</button>
+                <button onclick="verifyAdminPassword()" class="px-8 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-extrabold shadow-lg">Login</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Panel Modal -->
+    <div id="admin-panel" class="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-md hidden items-center justify-center p-8 font-sans">
+        <div class="bg-white rounded-3xl max-w-6xl w-full h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="px-10 py-6 border-b-2 border-slate-100 flex justify-between bg-slate-50 items-center">
+                <div>
+                    <h2 class="text-2xl font-black text-slate-900">Dashboard Configuration</h2>
+                    <p class="text-sm font-bold text-slate-500">Manage titles, buttons, and robust localForage files</p>
+                </div>
+                <button onclick="closeAdminPanel()" class="w-12 h-12 bg-slate-200 hover:bg-slate-300 rounded-xl flex items-center justify-center font-black text-xl text-slate-700 transition-colors">&times;</button>
+            </div>
+            
+            <div class="flex-grow overflow-y-auto p-10 space-y-10 bg-slate-50/50">
+                <!-- Data Sharing Section -->
+                <div class="bg-white border-2 border-slate-100 rounded-2xl p-8 shadow-sm">
+                    <h3 class="text-lg font-black text-slate-800 mb-6 flex items-center gap-2"><i class="ph-bold ph-share-network"></i> Share & Backup Dashboard</h3>
+                    <p class="text-sm font-bold text-slate-500 mb-6">Export all your buttons, titles, PDFs, and logos into a single file to share with someone else, or import data you received.</p>
+                    <div class="flex flex-wrap gap-4">
+                        <button onclick="exportDashboardData()" class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-black shadow-md flex items-center gap-2 transition-colors">
+                            <i class="ph-bold ph-download-simple text-lg"></i> Export Data (.json)
+                        </button>
+                        <button onclick="triggerImport()" class="px-6 py-3 bg-white border-2 border-slate-200 hover:bg-slate-50 text-slate-800 rounded-xl text-sm font-black shadow-sm flex items-center gap-2 transition-colors">
+                            <i class="ph-bold ph-upload-simple text-lg"></i> Import Data
+                        </button>
+                        <button onclick="exportShareableHTML()" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-black shadow-md flex items-center gap-2 transition-colors">
+                            <i class="ph-bold ph-file-html text-lg"></i> Export Shareable HTML
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Headings -->
+                <div class="bg-white border-2 border-slate-100 rounded-2xl p-8 shadow-sm">
+                    <h3 class="text-lg font-black text-slate-800 mb-6 flex items-center gap-2"><i class="ph-bold ph-text-aa"></i> Main Headings (Marathi)</h3>
+                    <div class="grid gap-5">
+                        <input type="text" id="edit-title-small" class="w-full text-base font-bold px-5 py-3 border-2 border-slate-200 rounded-xl font-marathi" placeholder="Top Small Title">
+                        <input type="text" id="edit-title-large" class="w-full text-base font-bold px-5 py-3 border-2 border-slate-200 rounded-xl font-marathi" placeholder="Main Large Title">
+                        <input type="text" id="edit-subtitle" class="w-full text-base font-bold px-5 py-3 border-2 border-slate-200 rounded-xl font-marathi" placeholder="Subtitle">
+                    </div>
+                    <button onclick="saveDashboardHeadings()" class="mt-6 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-black shadow-md">Save Headings</button>
+                </div>
+
+                <!-- Cards Management -->
+                <div class="bg-white border-2 border-slate-100 rounded-2xl p-8 shadow-sm">
+                    <h3 class="text-lg font-black text-slate-800 mb-6 flex items-center gap-2"><i class="ph-bold ph-squares-four"></i> Manage Presentation Cards</h3>
+                    
+                    <!-- Add Card Form -->
+                    <div class="flex gap-4 mb-10 p-6 bg-slate-100 border-2 border-slate-200 rounded-2xl items-end">
+                        <div class="flex-grow">
+                            <label class="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-2">New Button Title</label>
+                            <input type="text" id="new-card-title" placeholder="Enter title here..." class="w-full px-4 py-3 text-base font-black border-2 border-slate-300 rounded-xl focus:border-blue-500 font-marathi">
+                        </div>
+                        <div class="w-48">
+                            <label class="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-2">File Type</label>
+                            <select id="new-card-type" class="w-full px-4 py-3 text-base font-black border-2 border-slate-300 rounded-xl focus:border-blue-500">
+                                <option value="PDF">PDF Document</option>
+                                <option value="PPT">PowerPoint</option>
+                                <option value="DOCX">Word Document</option>
+                            </select>
+                        </div>
+                        <button onclick="addNewCard()" class="px-8 py-3 h-[52px] bg-emerald-600 hover:bg-emerald-700 text-white text-base font-black rounded-xl shadow-md transition-colors flex items-center gap-2">
+                            <i class="ph-bold ph-plus"></i> Add Card
+                        </button>
+                    </div>
+
+                    <!-- Items List -->
+                    <div id="admin-items-management" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Inputs -->
+    <input type="file" id="hidden-file-input" class="hidden" accept=".pdf,.ppt,.pptx,.doc,.docx,image/*">
+    <input type="file" id="hidden-logo-input" class="hidden" accept="image/*">
+    <input type="file" id="hidden-import-input" class="hidden" accept=".json">
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-10 right-10 z-50 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl text-base font-black flex items-center gap-4 transition-all duration-300 transform translate-y-32 opacity-0 font-sans">
+        <i id="toast-icon" class="ph-bold ph-check-circle text-2xl text-emerald-400"></i>
+        <span id="toast-message">Success</span>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+    <script>
+        // Initialize PDF.js Worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+        
+        // SETUP: Replace these placeholders with your Firebase project's web-app config.
+        const FIREBASE_CONFIG = {
+            apiKey: "PASTE_YOUR_FIREBASE_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
+            messagingSenderId: "PASTE_MESSAGING_SENDER_ID",
+            appId: "PASTE_YOUR_APP_ID"
+        };
+        let firebaseReady = false, cloudSaveTimer = null, cloudSaveInProgress = false;
+        let cloudDb = null, cloudStorage = null, cloudAuth = null;
+        function initFirebase() {
+            try {
+                if (!FIREBASE_CONFIG.apiKey || FIREBASE_CONFIG.apiKey.startsWith('PASTE_') || FIREBASE_CONFIG.projectId === 'YOUR_PROJECT_ID') return false;
+                firebase.initializeApp(FIREBASE_CONFIG);
+                cloudAuth = firebase.auth(); cloudDb = firebase.firestore(); cloudStorage = firebase.storage();
+                firebaseReady = true; return true;
+            } catch (e) { console.error('Firebase setup:', e); return false; }
+        }
+        async function loadCloudConfig() {
+            if (!firebaseReady) return null;
+            try { const snap = await cloudDb.collection('wardhaDashboard').doc('main').get(); return snap.exists ? snap.data().config : null; }
+            catch (e) { console.warn('Cloud config unavailable; using this browser copy.', e); return null; }
+        }
+        function queueCloudSave() {
+            if (!firebaseReady || !isAdminAuthenticated || !appData) return;
+            clearTimeout(cloudSaveTimer); cloudSaveTimer = setTimeout(async () => {
+                if (cloudSaveInProgress) { queueCloudSave(); return; }
+                cloudSaveInProgress = true;
+                try { await cloudDb.collection('wardhaDashboard').doc('main').set({config: appData, updatedAt: firebase.firestore.FieldValue.serverTimestamp()}); }
+                catch (e) { console.error(e); showToast('Cloud save failed. Check Firebase setup and rules.', false); }
+                finally { cloudSaveInProgress = false; }
+            }, 500);
+        }
+        async function uploadToCloud(file, path) {
+            if (!firebaseReady) throw new Error('Firebase is not configured. Follow SETUP-GUIDE.txt first.');
+            if (!cloudAuth.currentUser) throw new Error('Please sign in as admin first.');
+            const ref = cloudStorage.ref(path); await ref.put(file); return await ref.getDownloadURL();
+        }
+        async function urlToDataUrl(url) {
+            const response = await fetch(url); if (!response.ok) throw new Error('Could not download cloud file');
+            const blob = await response.blob(); return await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(blob); });
+        }
+        
+        const DEFAULT_CONFIG = {
+            titleSmall: "वर्धा विधानसभा - 47",
+            titleLarge: "विश्लेषण : 2009 - 2024",
+            subtitle: "निवडणूक विश्लेषण व माहिती फलक",
+            items: [
+                { id: 'c1', title: 'वर्षनिहाय निवडणूक निकाल', type: 'PDF', hasFile: false, hasLogo: false },
+                { id: 'c2', title: 'भाजप चे सामर्थ्य', type: 'PPT', hasFile: false, hasLogo: false },
+                { id: 'c3', title: 'काँग्रेस चे सामर्थ्य', type: 'PDF', hasFile: false, hasLogo: false },
+                { id: 'c4', title: 'काँग्रेसचे संघटनात्मक आणि सभासद नोंदणी', type: 'DOCX', hasFile: false, hasLogo: false },
+                { id: 'c5', title: 'काँग्रेस ची स्पर्धा', type: 'PPT', hasFile: false, hasLogo: false },
+                { id: 'c6', title: 'समाज समूह व त्यांचा पाठिंबा - समाजराजकीय कल', type: 'PDF', hasFile: false, hasLogo: false },
+                { id: 'c7', title: 'समाज निहाय राजकीय कल', type: 'PPT', hasFile: false, hasLogo: false },
+                { id: 'c8', title: 'विविधसामाजिक संघटना', type: 'DOCX', hasFile: false, hasLogo: false },
+                { id: 'c9', title: 'राजकीय मुद्दे', type: 'PPT', hasFile: false, hasLogo: false },
+                { id: 'c10', title: 'पक्ष प्रवेश', type: 'PDF', hasFile: false, hasLogo: false },
+                { id: 'c11', title: 'अभिप्राय', type: 'PDF', hasFile: false, hasLogo: false },
+                { id: 'c12', title: 'बूथ निहाय व्यवस्थापन', type: 'PPT', hasFile: false, hasLogo: false },
+                { id: 'c13', title: 'बूथ ची स्थिती व त्यांचे व्यवस्थापन', type: 'PDF', hasFile: false, hasLogo: false }
+            ]
+        };
+
+        let appData = null;
+        let isAdminAuthenticated = false;
+        let currentZoomLevel = 1.0;
+        let activeAttachmentId = null;
+
+        // Initialize App & Storage
+        async function initApp() {
+            initFirebase();
+            // Configure localForage to prefer IndexedDB
+            localforage.config({
+                name: 'WardhaDashboardDB',
+                storeName: 'presentation_files',
+                description: 'Stores large PDF/PPT files to avoid localStorage limits'
+            });
+
+            const cloudConfig = await loadCloudConfig();
+            const savedConfig = localStorage.getItem('wardha_dashboard_config_v2');
+            if (cloudConfig && Array.isArray(cloudConfig.items)) {
+                appData = cloudConfig;
+                localStorage.setItem('wardha_dashboard_config_v2', JSON.stringify(appData));
+            } else if (savedConfig) {
+                try { 
+                    appData = JSON.parse(savedConfig); 
+                } catch (e) { 
+                    appData = JSON.parse(JSON.stringify(DEFAULT_CONFIG)); 
+                }
+            } else {
+                appData = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+                saveConfig();
+            }
+            
+            // Backward-compatible defaults for per-button position and background colour.
+            appData.items.forEach((item, index) => { if (!Number.isFinite(Number(item.position))) item.position = index + 1; if (!item.bgColor) item.bgColor = '#ffffff'; });
+            saveConfig();
+
+            // SECURITY FIX: never restore Admin access automatically on page load.
+            // Each newly opened copy/device must authenticate again.
+            isAdminAuthenticated = false;
+            try { sessionStorage.removeItem('wardha_admin'); } catch (e) {}
+            const adminPanel = document.getElementById('admin-panel');
+            const loginModal = document.getElementById('admin-login-modal');
+            if (adminPanel) { adminPanel.classList.add('hidden'); adminPanel.classList.remove('flex'); }
+            if (loginModal) { loginModal.classList.add('hidden'); loginModal.classList.remove('flex'); }
+            setAdminUIActive(false);
+
+            await renderUI();
+            if (firebaseReady) {
+                cloudDb.collection('wardhaDashboard').doc('main').onSnapshot(snap => {
+                    if (!snap.exists || isAdminAuthenticated) return;
+                    const remote = snap.data().config;
+                    if (remote && Array.isArray(remote.items)) {
+                        appData = remote; localStorage.setItem('wardha_dashboard_config_v2', JSON.stringify(appData));
+                        renderUI();
+                    }
+                }, err => console.warn('Live updates unavailable:', err));
+            }
+        }
+
+        function saveConfig() { 
+            // We only save METADATA to localStorage. Files go to localForage.
+            localStorage.setItem('wardha_dashboard_config_v2', JSON.stringify(appData));
+            queueCloudSave();
+        }
+
+        function showToast(msg, success = true) {
+            const t = document.getElementById('toast');
+            document.getElementById('toast-message').textContent = msg;
+            document.getElementById('toast-icon').className = success ? "ph-bold ph-check-circle text-2xl text-emerald-400" : "ph-bold ph-warning-circle text-2xl text-red-400";
+            t.classList.remove('translate-y-32', 'opacity-0');
+            setTimeout(() => t.classList.add('translate-y-32', 'opacity-0'), 3000);
+        }
+
+        function getFileVisuals(type) {
+            switch(type) {
+                case 'PDF': return { icon: 'ph-file-pdf', badgeClass: 'badge-pdf', label: 'PDF' };
+                case 'PPT': return { icon: 'ph-file-ppt', badgeClass: 'badge-ppt', label: 'PPT' };
+                case 'DOCX': return { icon: 'ph-file-doc', badgeClass: 'badge-word', label: 'Word' };
+                default: return { icon: 'ph-file-text', badgeClass: 'badge-pdf', label: 'DOC' };
+            }
+        }
+
+        // --- Core UI Rendering ---
+        async function renderUI() {
+            document.getElementById('display-title-small').textContent = appData.titleSmall;
+            document.getElementById('display-title-large').textContent = appData.titleLarge;
+            document.getElementById('display-subtitle').textContent = appData.subtitle;
+
+            // Older saved dashboards receive defaults for the new position and colour settings.
+            appData.items.forEach((item, index) => {
+                if (!Number.isFinite(Number(item.position))) item.position = index + 1;
+                if (!item.bgColor) item.bgColor = '#ffffff';
+            });
+            const grid = document.getElementById('cards-grid');
+            grid.innerHTML = '';
+            const sortedItems = [...appData.items].sort((a,b) => (Number(a.position)||9999) - (Number(b.position)||9999));
+
+            for (const item of sortedItems) {
+                const vis = getFileVisuals(item.type);
+                const btn = document.createElement('button');
+                btn.onclick = () => openPresentation(item.id);
+                btn.className = "glass-card text-left p-7 rounded-3xl flex flex-col justify-between h-full min-h-[12rem] group relative overflow-hidden focus:outline-none focus:ring-4 focus:ring-blue-500/30";
+                btn.style.background = `linear-gradient(135deg, ${item.bgColor || '#ffffff'}ee, ${item.bgColor || '#ffffff'}cc)`;
+                btn.style.borderColor = `${item.bgColor || '#ffffff'}`;
+
+                let logoHtml = `<span class="px-3 py-1.5 rounded-lg text-xs font-black tracking-widest font-sans uppercase ${vis.badgeClass} flex items-center gap-2"><i class="ph-fill ${vis.icon} text-base"></i> ${vis.label}</span>`;
+                if (item.hasLogo) {
+                    try {
+                        const logoData = await localforage.getItem(`logo_${item.id}`);
+                        if (logoData || item.logoUrl) logoHtml = `<div class="h-10 max-w-[140px] flex items-center justify-start"><img src="${logoData || item.logoUrl}" class="max-h-full max-w-full object-contain drop-shadow-md rounded" alt="Logo"></div>`;
+                    } catch (e) { console.error("Error loading logo from DB", e); }
+                }
+                btn.innerHTML = `
+                    <div class="absolute inset-0 bg-gradient-to-br from-white/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    <div class="relative z-10 w-full h-full flex flex-col justify-between gap-4">
+                        <div class="flex items-start gap-3"><span class="shrink-0 rounded-lg bg-white/75 px-2 py-1 text-sm font-black text-slate-700 shadow-sm">${Number(item.position)||''}</span><h3 class="text-2xl font-black text-slate-900 leading-snug group-hover:text-blue-800 transition-colors pb-2">${item.title}</h3></div>
+                        <div class="flex items-center justify-between mt-auto pt-2">${logoHtml}<div class="w-10 h-10 rounded-full bg-slate-200/80 text-slate-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm transform group-hover:scale-110"><i class="ph-bold ph-arrow-right text-lg"></i></div></div>
+                    </div>`;
+                grid.appendChild(btn);
+            }
+            saveConfig();
+        }
+
+        // --- Robust Async Presentation Viewer ---
+        async function openPresentation(id) {
+            const item = appData.items.find(i => i.id === id);
+            if (!item) return;
+
+            const modal = document.getElementById('presentation-modal');
+            const iframe = document.getElementById('presentation-frame');
+            const pdfWrapper = document.getElementById('pdf-scroll-wrapper');
+            const emptyView = document.getElementById('builtin-slide-view');
+            
+            const vis = getFileVisuals(item.type);
+            document.getElementById('viewer-title').textContent = item.title;
+            document.getElementById('viewer-icon').className = `w-10 h-10 rounded-xl flex items-center justify-center text-2xl ${vis.badgeClass}`;
+            document.getElementById('viewer-icon').innerHTML = `<i class="ph-fill ${vis.icon}"></i>`;
+            
+            resetZoom();
+            iframe.classList.add('hidden');
+            pdfWrapper.classList.add('hidden');
+            emptyView.classList.add('hidden');
+            document.getElementById('pdf-pages-container').innerHTML = ''; // Clear old
+
+            modal.classList.remove('hidden');
+            setTimeout(() => modal.classList.remove('opacity-0'), 10);
+
+            if (item.hasFile) {
+                try {
+                    let fileData = await localforage.getItem(`file_${item.id}`);
+                    if (!fileData && item.fileUrl) fileData = await urlToDataUrl(item.fileUrl);
+                    if (!fileData) throw new Error("File not found in local or cloud storage");
+
+                    if (item.type === 'PDF') {
+                        pdfWrapper.classList.remove('hidden');
+                        pdfWrapper.classList.add('flex');
+                        await loadAsyncPDF(fileData);
+                    } else {
+                        iframe.classList.remove('hidden');
+                        iframe.src = fileData;
+                    }
+                } catch (error) {
+                    console.error(error);
+                    showToast("Error reading file data", false);
+                    emptyView.classList.remove('hidden');
+                    emptyView.classList.add('flex');
+                }
+            } else {
+                emptyView.classList.remove('hidden');
+                emptyView.classList.add('flex');
+            }
+        }
+
+        function closePresentationViewer() {
+            const modal = document.getElementById('presentation-modal');
+            modal.classList.add('opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                document.getElementById('presentation-frame').src = '';
+                document.getElementById('pdf-pages-container').innerHTML = '';
+            }, 300);
+        }
+
+        // Asynchronous non-blocking PDF Render
+        async function loadAsyncPDF(dataUrl) {
+            const container = document.getElementById('pdf-pages-container');
+            container.innerHTML = `
+                <div class="flex flex-col items-center justify-center py-20 text-blue-600">
+                    <i class="ph-duotone ph-spinner-gap animate-spin text-5xl mb-4"></i>
+                    <p class="font-extrabold text-lg">Parsing PDF Document...</p>
+                </div>
+            `;
+            
+            try {
+                // Convert base64 to Uint8Array for PDF.js
+                const base64Str = dataUrl.split(',')[1];
+                const binaryString = window.atob(base64Str);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+
+                const loadingTask = pdfjsLib.getDocument({ data: bytes });
+                const pdfDoc = await loadingTask.promise;
+                
+                container.innerHTML = ''; // clear loader
+                
+                // Render pages sequentially
+                for (let i = 1; i <= pdfDoc.numPages; i++) {
+                    const page = await pdfDoc.getPage(i);
+                    const viewport = page.getViewport({ scale: 1.5 });
+                    
+                    const canvas = document.createElement('canvas');
+                    canvas.className = "w-full max-w-full bg-white shadow-2xl rounded-xl mb-8";
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+                    container.appendChild(canvas);
+                    
+                    // Await the render process so it doesn't crash the browser memory
+                    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+                    
+                    // Yield a tiny bit of time back to the browser main thread to prevent UI freezing
+                    await new Promise(r => setTimeout(r, 10)); 
+                }
+            } catch (e) {
+                console.error(e);
+                container.innerHTML = '<div class="text-red-500 font-extrabold p-10 text-xl"><i class="ph-bold ph-warning mr-2"></i>Error rendering PDF file. The file might be corrupted.</div>';
+            }
+        }
+
+        function zoomViewer(delta) {
+            currentZoomLevel = Math.max(0.5, Math.min(3.0, currentZoomLevel + delta));
+            applyZoom();
+        }
+        function resetZoom() { currentZoomLevel = 1.0; applyZoom(); }
+        function applyZoom() {
+            document.getElementById('viewer-scale-container').style.transform = `scale(${currentZoomLevel})`;
+            document.getElementById('zoom-level-text').textContent = `${Math.round(currentZoomLevel * 100)}%`;
+        }
+        function toggleFullScreen() {
+            if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
+            else if (document.exitFullscreen) document.exitFullscreen();
+        }
+
+        // --- Admin Session & Controls ---
+        function setAdminUIActive(isActive) {
+            const icon = document.getElementById('admin-icon');
+            const text = document.getElementById('admin-text');
+            const logoutBtn = document.getElementById('admin-logout-btn');
+            const mainBtn = document.getElementById('admin-main-btn');
+
+            if (isActive) {
+                icon.className = "ph-fill ph-shield-check text-emerald-600 text-xl";
+                text.textContent = "Manage Dashboard";
+                text.className = "text-emerald-800 font-black";
+                mainBtn.classList.replace('text-slate-800', 'text-emerald-800');
+                mainBtn.classList.add('bg-emerald-100', 'border-2', 'border-emerald-200');
+                logoutBtn.classList.remove('hidden');
+                logoutBtn.classList.add('flex');
+            } else {
+                icon.className = "ph-bold ph-lock-key text-xl";
+                text.textContent = "Admin";
+                text.className = "text-slate-800 font-black";
+                mainBtn.classList.replace('text-emerald-800', 'text-slate-800');
+                mainBtn.classList.remove('bg-emerald-100', 'border-2', 'border-emerald-200');
+                logoutBtn.classList.add('hidden');
+                logoutBtn.classList.remove('flex');
+            }
+        }
+
+        function handleAdminClick() {
+            if (isAdminAuthenticated) {
+                openAdminPanel();
+            } else {
+                document.getElementById('admin-email-input').value = '';
+                document.getElementById('admin-password-input').value = '';
+                document.getElementById('password-error').classList.add('hidden');
+                document.getElementById('admin-login-modal').classList.remove('hidden');
+                document.getElementById('admin-login-modal').classList.add('flex');
+            }
+        }
+
+        function closeAdminLoginModal() {
+            document.getElementById('admin-login-modal').classList.add('hidden');
+            document.getElementById('admin-login-modal').classList.remove('flex');
+        }
+
+        async function verifyAdminPassword() {
+            const email = document.getElementById('admin-email-input').value.trim();
+            const password = document.getElementById('admin-password-input').value;
+            if (!firebaseReady) { showToast('Firebase is not configured. Follow SETUP-GUIDE.txt.', false); return; }
+            try {
+                await cloudAuth.signInWithEmailAndPassword(email, password);
+                isAdminAuthenticated = true;
+                closeAdminLoginModal(); setAdminUIActive(true); openAdminPanel();
+                showToast('Admin signed in. Cloud updates enabled.');
+            } catch (e) {
+                console.error(e); document.getElementById('password-error').textContent = 'Sign-in failed. Check email/password and Firebase Authentication setup.';
+                document.getElementById('password-error').classList.remove('hidden');
+            }
+        }
+
+        function logoutAdmin() {
+            isAdminAuthenticated = false;
+            if (cloudAuth) cloudAuth.signOut().catch(console.warn);
+            setAdminUIActive(false);
+            showToast("Logged out securely");
+        }
+
+        // --- Admin Data Management (CRUD & localForage) ---
+        function openAdminPanel() {
+            document.getElementById('edit-title-small').value = appData.titleSmall;
+            document.getElementById('edit-title-large').value = appData.titleLarge;
+            document.getElementById('edit-subtitle').value = appData.subtitle;
+            renderAdminCardsList();
+            document.getElementById('admin-panel').classList.remove('hidden');
+            document.getElementById('admin-panel').classList.add('flex');
+        }
+        
+        function closeAdminPanel() {
+            document.getElementById('admin-panel').classList.add('hidden');
+            document.getElementById('admin-panel').classList.remove('flex');
+        }
+
+        function saveDashboardHeadings() {
+            appData.titleSmall = document.getElementById('edit-title-small').value;
+            appData.titleLarge = document.getElementById('edit-title-large').value;
+            appData.subtitle = document.getElementById('edit-subtitle').value;
+            saveConfig();
+            renderUI();
+            showToast("Headings updated");
+        }
+
+        function renderAdminCardsList() {
+            const list = document.getElementById('admin-items-management');
+            list.innerHTML = '';
+            appData.items.forEach((item, index) => {
+                if (!Number.isFinite(Number(item.position))) item.position = index + 1;
+                if (!item.bgColor) item.bgColor = '#ffffff';
+                const d = document.createElement('div');
+                d.className = "flex flex-col gap-4 p-5 border-2 border-slate-200 rounded-2xl bg-white shadow-sm";
+                d.innerHTML = `
+                    <div class="flex justify-between items-start gap-3">
+                        <div class="flex-grow pr-2 min-w-0"><p class="font-black text-lg text-slate-900 font-marathi mb-2 leading-tight">${item.title}</p>
+                            <div class="flex flex-wrap items-center gap-2"><span class="text-xs font-black px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 tracking-wider">${item.type}</span>
+                            ${item.hasFile ? '<span class="text-xs text-emerald-600 font-black"><i class="ph-bold ph-check-circle"></i> File Attached</span>' : '<span class="text-xs text-amber-500 font-black"><i class="ph-bold ph-warning-circle"></i> No File</span>'}</div>
+                        </div>
+                        <button onclick="deleteCard('${item.id}')" class="shrink-0 text-red-500 hover:text-white bg-red-50 hover:bg-red-500 p-2.5 rounded-xl transition-colors shadow-sm" title="Delete entire button"><i class="ph-bold ph-trash text-xl"></i><span class="block text-[10px] font-black">Button</span></button>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 border-t border-slate-100 pt-3">
+                        <label class="text-xs text-slate-600">Button position
+                            <input type="number" min="1" step="1" value="${Number(item.position)||index+1}" onchange="updateCardPosition('${item.id}', this.value)" class="mt-1 w-full px-3 py-2 border-2 border-slate-200 rounded-lg text-sm font-black text-slate-800" />
+                        </label>
+                        <label class="text-xs text-slate-600">Light button colour
+                            <input type="color" value="${item.bgColor || '#ffffff'}" onchange="updateCardColor('${item.id}', this.value)" class="card-colour-control mt-1 block w-full" title="Choose this button's background colour" />
+                        </label>
+                        <div class="flex items-end"><button onclick="clearAttachedFile('${item.id}')" ${item.hasFile ? '' : 'disabled'} class="w-full px-3 py-2 rounded-lg text-xs font-black ${item.hasFile ? 'bg-red-50 border-2 border-red-200 text-red-600 hover:bg-red-100' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}" title="Remove only the attached document"><i class="ph-bold ph-file-x"></i> Delete File</button></div>
+                    </div>
+                    <div class="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
+                        <button onclick="triggerAttachFile('${item.id}')" class="flex-1 px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl hover:bg-slate-100 text-sm font-black text-slate-700 flex items-center justify-center gap-1.5"><i class="ph-bold ph-upload-simple"></i> ${item.hasFile ? 'Replace File' : 'Upload File'}</button>
+                        <button onclick="triggerAttachLogo('${item.id}')" class="flex-1 px-3 py-2 bg-slate-50 border-2 border-slate-200 rounded-xl hover:bg-slate-100 text-sm font-black text-slate-700 flex items-center justify-center gap-1.5"><i class="ph-bold ph-image"></i> ${item.hasLogo ? 'Change Logo' : 'Set Logo'}</button>
+                        ${item.hasLogo ? `<button onclick="removeLogo('${item.id}')" class="px-3 py-2 bg-red-50 border-2 border-red-200 rounded-xl hover:bg-red-100 text-red-600 text-sm font-black" title="Remove Logo"><i class="ph-bold ph-x"></i> Remove Logo</button>` : ''}
+                    </div>`;
+                list.appendChild(d);
+            });
+            saveConfig();
+        }
+
+        function updateCardPosition(id, value) {
+            const item = appData.items.find(i => i.id === id);
+            const position = parseInt(value, 10);
+            if (!item || !Number.isFinite(position) || position < 1) return showToast('Position must be 1 or greater.', false);
+            item.position = position;
+            saveConfig(); renderUI(); renderAdminCardsList();
+            showToast('Button position updated.');
+        }
+
+        function updateCardColor(id, value) {
+            const item = appData.items.find(i => i.id === id);
+            if (!item) return;
+            item.bgColor = value || '#ffffff';
+            saveConfig(); renderUI();
+            showToast('Button colour updated.');
+        }
+
+        async function clearAttachedFile(id) {
+            const item = appData.items.find(i => i.id === id);
+            if (!item || !item.hasFile) return showToast('There is no attached file to delete.', false);
+            if (!confirm(`Delete only the attached file from "${item.title}"? The button and logo will remain.`)) return;
+            try {
+                await localforage.removeItem(`file_${id}`);
+                item.hasFile = false; item.fileUrl = null;
+                saveConfig(); renderUI(); renderAdminCardsList();
+                showToast('Attached file deleted. Button and logo kept.');
+            } catch (e) { console.error(e); showToast('Could not delete the attached file.', false); }
+        }
+
+        function addNewCard() {
+            const titleInput = document.getElementById('new-card-title');
+            const typeInput = document.getElementById('new-card-type');
+            if (!titleInput.value.trim()) return showToast("Title is required", false);
+            
+            const newId = 'c' + Date.now();
+            appData.items.push({
+                id: newId,
+                title: titleInput.value.trim(),
+                type: typeInput.value,
+                hasFile: false,
+                hasLogo: false,
+                position: Math.max(0, ...appData.items.map(i => Number(i.position) || 0)) + 1,
+                bgColor: '#ffffff'
+            });
+            saveConfig();
+            renderUI();
+            renderAdminCardsList();
+            titleInput.value = ''; // reset
+            showToast("New card added! You can now upload a file to it.");
+        }
+
+        async function deleteCard(id) {
+            if(!confirm("Are you sure you want to completely remove this button?")) return;
+            
+            // Remove from config array
+            appData.items = appData.items.filter(i => i.id !== id);
+            saveConfig();
+            
+            // Cleanup heavy DB files
+            try {
+                await localforage.removeItem(`file_${id}`);
+                await localforage.removeItem(`logo_${id}`);
+            } catch(e) { console.warn("Cleanup error", e); }
+            
+            renderUI();
+            renderAdminCardsList();
+            showToast("Card and associated files removed.");
+        }
+
+        // --- File Upload & DB Integration ---
+        function triggerAttachFile(id) {
+            activeAttachmentId = id;
+            document.getElementById('hidden-file-input').click();
+        }
+
+        let activeLogoId = null;
+        function triggerAttachLogo(id) {
+            activeLogoId = id;
+            document.getElementById('hidden-logo-input').click();
+        }
+
+        async function removeLogo(id) {
+            const item = appData.items.find(i => i.id === id);
+            if (item) {
+                item.hasLogo = false;
+                item.logoUrl = null;
+                saveConfig();
+                await localforage.removeItem(`logo_${id}`);
+                renderUI();
+                renderAdminCardsList();
+                showToast("Custom logo removed.");
+            }
+        }
+
+        // Helper to convert file to Base64 safely
+        const fileToBase64 = file => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = error => reject(error);
+        });
+
+        // Handle Main Document Upload
+        document.getElementById('hidden-file-input').addEventListener('change', async function(e) {
+            if (!this.files || !this.files[0] || !activeAttachmentId) return;
+            const file = this.files[0];
+            
+            showToast("Processing file... Please wait.", true);
+            
+            try {
+                const base64Data = await fileToBase64(file);
+                
+                // Store heavily data in IndexedDB (localForage)
+                await localforage.setItem(`file_${activeAttachmentId}`, base64Data);
+                const cloudUrl = await uploadToCloud(file, `dashboard-files/${activeAttachmentId}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`);
+                
+                // Update light metadata config
+                const item = appData.items.find(i => i.id === activeAttachmentId);
+                if (item) {
+                    item.hasFile = true;
+                    item.fileUrl = cloudUrl;
+                    saveConfig();
+                    renderAdminCardsList();
+                    showToast(`File successfully saved to database!`);
+                }
+            } catch (err) {
+                console.error(err);
+                showToast("Error processing file. File might be too large.", false);
+            }
+            this.value = '';
+        });
+
+        // Handle Logo Upload
+        document.getElementById('hidden-logo-input').addEventListener('change', async function(e) {
+            if (!this.files || !this.files[0] || !activeLogoId) return;
+            const file = this.files[0];
+            
+            try {
+                const base64Data = await fileToBase64(file);
+                
+                await localforage.setItem(`logo_${activeLogoId}`, base64Data);
+                const cloudLogoUrl = await uploadToCloud(file, `dashboard-logos/${activeLogoId}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`);
+                
+                const item = appData.items.find(i => i.id === activeLogoId);
+                if (item) {
+                    item.hasLogo = true;
+                    item.logoUrl = cloudLogoUrl;
+                    saveConfig();
+                    await renderUI(); 
+                    renderAdminCardsList();
+                    showToast(`Custom logo applied!`);
+                }
+            } catch(err) {
+                showToast("Error saving logo", false);
+            }
+            this.value = '';
+        });
+
+        // --- Data Import/Export (Share feature) ---
+        function triggerImport() {
+            document.getElementById('hidden-import-input').click();
+        }
+
+        document.getElementById('hidden-import-input').addEventListener('change', async function(e) {
+            if (!this.files || !this.files[0]) return;
+            const file = this.files[0];
+            showToast("Importing data, please wait... This may take a moment.", true);
+            
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (!data.config || !data.files) throw new Error("Invalid format");
+                    
+                    // Clear existing localForage data to prevent stale/orphaned files
+                    await localforage.clear();
+                    
+                    // Save all embedded files to local browser DB
+                    for (const key in data.files) {
+                        await localforage.setItem(key, data.files[key]);
+                    }
+                    
+                    // Overwrite local storage config with imported data
+                    localStorage.setItem('wardha_dashboard_config_v2', JSON.stringify(data.config));
+                    
+                    showToast("Import successful! Reloading page...");
+                    setTimeout(() => window.location.reload(), 1500); // Reload to apply all changes instantly
+                } catch (err) {
+                    console.error(err);
+                    showToast("Error parsing import file. Make sure it is a valid backup.", false);
+                }
+            };
+            reader.readAsText(file);
+            this.value = ''; // Reset input
+        });
+
+
+        // Export a portable HTML copy in separate Blob parts to avoid building one huge string in RAM.
+        async function exportShareableHTML() {
+            const btn = document.querySelector('[onclick="exportShareableHTML()"]');
+            const originalLabel = btn ? btn.innerHTML : '';
+            const pause = () => new Promise(resolve => setTimeout(resolve, 25));
+            const formatBytes = n => n < 1024*1024 ? Math.round(n/1024) + ' KB' : (n/1024/1024).toFixed(1) + ' MB';
+            try {
+                if (btn) { btn.disabled = true; btn.style.opacity = '.65'; }
+                showToast('Checking dashboard files…', true);
+                await pause();
+
+                const configText = JSON.stringify(appData).replace(/</g, '\\u003c');
+                const fileKeys = [];
+                for (const item of (appData.items || [])) {
+                    if (item.hasFile) fileKeys.push(`file_${item.id}`);
+                    if (item.hasLogo) fileKeys.push(`logo_${item.id}`);
+                }
+
+                // Collect each stored file separately and yield between reads.
+                const storedFiles = [];
+                let totalChars = configText.length;
+                for (let i = 0; i < fileKeys.length; i++) {
+                    const key = fileKeys[i];
+                    const value = await localforage.getItem(key);
+                    if (value) {
+                        const textValue = typeof value === 'string' ? value : JSON.stringify(value);
+                        storedFiles.push({ key, textValue });
+                        totalChars += textValue.length;
+                    }
+                    if (btn) btn.innerHTML = `Checking files ${i+1}/${fileKeys.length}`;
+                    if (i % 1 === 0) await pause();
+                }
+
+                // Huge single-file HTML exports are unreliable in mobile/WhatsApp browsers.
+                // Warn rather than freeze or create a broken file.
+                const approxBytes = totalChars;
+                const MOBILE_SAFE_LIMIT = 80 * 1024 * 1024;
+                if (approxBytes > MOBILE_SAFE_LIMIT) {
+                    showToast(`Files total about ${formatBytes(approxBytes)}. Too large for reliable mobile HTML sharing; use Export Data or split files.`, false);
+                    return;
+                }
+
+                showToast('Preparing HTML in parts…', true);
+                if (btn) btn.innerHTML = 'Building HTML…';
+                await pause();
+
+                let baseHtml = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+                // Remove any prior embedded payload and boot loader from an already-exported file.
+                baseHtml = baseHtml.replace(/<script id="wardha-embedded-share-config" type="application\/json">[\s\S]*?<\/script>/g, '');
+                baseHtml = baseHtml.replace(/<script class="wardha-embedded-share-file" type="application\/json" data-key="[^"]*">[\s\S]*?<\/script>/g, '');
+                baseHtml = baseHtml.replace(/<script id="wardha-share-boot">[\s\S]*?<\/script>/g, '');
+                const closeBody = baseHtml.toLowerCase().lastIndexOf('</body>');
+                const head = closeBody >= 0 ? baseHtml.slice(0, closeBody) : baseHtml;
+                const tail = closeBody >= 0 ? baseHtml.slice(closeBody) : '</body></html>';
+
+                const boot = `
+<script id="wardha-share-boot">
+(function () {
+  window.addEventListener('load', async function () {
+    var configNode = document.getElementById('wardha-embedded-share-config');
+    if (!configNode || sessionStorage.getItem('wardha_share_imported_once') === 'yes') return;
+    try {
+      if (!window.localforage) throw new Error('Storage library did not load');
+      var config = JSON.parse(configNode.textContent || '{}');
+      if (!config || !Array.isArray(config.items)) throw new Error('Invalid dashboard config');
+      localStorage.setItem('wardha_dashboard_config_v2', JSON.stringify(config));
+      var nodes = Array.prototype.slice.call(document.querySelectorAll('.wardha-embedded-share-file'));
+      for (var i = 0; i < nodes.length; i++) {
+        var key = nodes[i].getAttribute('data-key');
+        if (!key) continue;
+        await localforage.setItem(key, JSON.parse(nodes[i].textContent || 'null'));
+        nodes[i].remove();
+        if (i % 1 === 0) await new Promise(function(resolve){ setTimeout(resolve, 10); });
+      }
+      sessionStorage.setItem('wardha_share_imported_once', 'yes');
+      configNode.remove();
+      window.location.reload();
+    } catch (err) {
+      console.error('Shared dashboard import failed:', err);
+      alert('Dashboard import failed. Please save this HTML to your phone and open it in Chrome. If it is very large, split the files into smaller exports.');
+    }
+  }, { once: true });
+})();
+<\/script>`;
+                const parts = [head, '\n<script id="wardha-embedded-share-config" type="application/json">', configText, '<\/script>\n'];
+                for (let i = 0; i < storedFiles.length; i++) {
+                    const f = storedFiles[i];
+                    parts.push(`<script class="wardha-embedded-share-file" type="application/json" data-key="${f.key}">`);
+                    parts.push(JSON.stringify(f.textValue).replace(/</g, '\\u003c'));
+                    parts.push('<\/script>\n');
+                    if (btn) btn.innerHTML = `Building ${i+1}/${storedFiles.length}`;
+                    await pause();
+                }
+                parts.push(boot, '\n', tail);
+                const blob = new Blob(parts, { type: 'text/html;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'Wardha_Dashboard_Shared_' + new Date().toISOString().slice(0,10) + '.html';
+                a.style.display = 'none';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 180000);
+                showToast(`Shareable HTML created (${formatBytes(blob.size)}). Save it before sharing.`, true);
+            } catch (err) {
+                console.error('Shareable export failed:', err);
+                showToast('Export failed. Try exporting fewer or smaller files, then share again.', false);
+            } finally {
+                if (btn) { btn.disabled = false; btn.style.opacity = ''; btn.innerHTML = originalLabel; }
+            }
+        }
+
+        async function exportDashboardData() {
+            showToast("Gathering files for export... Please wait.", true);
+            
+            try {
+                // Initialize the mega-object that will hold the setup and all Base64 file strings
+                const exportData = {
+                    config: appData,
+                    files: {}
+                };
+                
+                // Fetch every file and logo stored in IndexedDB and attach it to the export object
+                for (const item of appData.items) {
+                    if (item.hasFile) {
+                        const fileData = await localforage.getItem(`file_${item.id}`);
+                        if (fileData) exportData.files[`file_${item.id}`] = fileData;
+                    }
+                    if (item.hasLogo) {
+                        const logoData = await localforage.getItem(`logo_${item.id}`);
+                        if (logoData) exportData.files[`logo_${item.id}`] = logoData;
+                    }
+                }
+                
+                // Stringify the entire state
+                const jsonStr = JSON.stringify(exportData);
+                const blob = new Blob([jsonStr], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                
+                // Trigger an automatic download
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Wardha_Dashboard_Backup_${new Date().getTime()}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                showToast("Export complete! File downloaded.");
+            } catch (err) {
+                console.error(err);
+                showToast("Error exporting data.", false);
+            }
+        }
+
+        // Start
+        window.onload = initApp;
+    </script>
+</body>
+</html>
